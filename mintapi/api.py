@@ -32,23 +32,8 @@ from selenium.webdriver.remote.webelement import WebElement
 from seleniumrequests import Chrome
 import xmltodict
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
 logger = logging.getLogger('mintapi')
 logger.setLevel(logging.INFO)
-
-
-def assert_pd():
-    # Common function to check if pd is installed
-    if not pd:
-        raise ImportError(
-            'transactions data requires pandas; '
-            'please pip install pandas'
-        )
-
 
 def json_date_to_datetime(dateraw):
     cy = date.today().year
@@ -752,39 +737,6 @@ class Mint(object):
             offset += len(txns)
         return all_txns
 
-    def get_detailed_transactions(self, include_investment=False,
-                                  skip_duplicates=False,
-                                  remove_pending=True,
-                                  start_date=None):
-        """Returns the JSON transaction data as a DataFrame, and converts
-        current year dates and prior year dates into consistent datetime
-        format, and reverses credit activity.
-
-        Note: start_date must be in format mm/dd/yy. If pulls take too long,
-        use a more recent start date. See json explanations of
-        include_investment and skip_duplicates.
-
-        Also note: Mint includes pending transactions, however these sometimes
-        change dates/amounts after the transactions post. They have been
-        removed by default in this pull, but can be included by changing
-        remove_pending to False
-
-        """
-        assert_pd()
-
-        result = self.get_transactions_json(include_investment,
-                                            skip_duplicates, start_date)
-        df = pd.DataFrame(result)
-        df['odate'] = df['odate'].apply(json_date_to_datetime)
-
-        if remove_pending:
-            df = df[~df.isPending]
-            df.reset_index(drop=True, inplace=True)
-
-        df.amount = df.apply(reverse_credit_amount, axis=1)
-
-        return df
-
     def get_transactions_csv(self, include_investment=False, acct=0):
         """Returns the raw CSV transaction data as downloaded from Mint.
 
@@ -817,18 +769,6 @@ class Mint(object):
             if a['accountType'] in invert else a['currentBalance']
             for a in account_data if a['isActive']
         ])
-
-    def get_transactions(self, include_investment=False):
-        """Returns the transaction data as a Pandas DataFrame."""
-        assert_pd()
-        s = StringIO(self.get_transactions_csv(
-            include_investment=include_investment))
-        s.seek(0)
-        df = pd.read_csv(s, parse_dates=['Date'])
-        df.columns = [c.lower().replace(' ', '_') for c in df.columns]
-        df.category = (df.category.str.lower()
-                       .replace('uncategorized', pd.NA))
-        return df
 
     def populate_extended_account_detail(self, accounts):  # {{{
         # I can't find any way to retrieve this information other than by
